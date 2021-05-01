@@ -1,0 +1,17 @@
+{
+    "name": "com.minus4kelvin.buildsystem.runtime",
+    "rootNamespace": "",
+    "references": [
+        "GUID:b39e51532aaf1aa42afe103341854a22",
+        "GUID:6055be8ebefd69e48b49212b09b47b2f"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,14 @@
+{
+  "name": "com.minus4kelvin.buildsystem",
+  "version": "1.0.0",
+  "displayName": "m4k.BuildingSystem",
+  "description": "Custom building system built on inventory system",
+  "unity": "2019.1",
+  "dependencies": {
+    "com.minus4kelvin.core": "1.0.0",
+    "com.unity.textmeshpro": ""
+  },
+  "keywords": [
+    "build"
+  ]
+}
