@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.AI;
 using m4k.InventorySystem;
 
@@ -12,7 +13,9 @@ public class BuildingSystemObject : MonoBehaviour, IBuildable
     public Collider[] cols;
     // public Renderer[] renderers;
     public Rigidbody rb;
-    public Renderer[] buildingVisuals;
+    public bool keepActiveRb = false;
+    public Transform buildingVisualsParent;
+    public UnityEvent<bool> onToggleVisuals, onToggleEdit;
 
     int[] origColLayers;
     bool initialized;
@@ -22,6 +25,7 @@ public class BuildingSystemObject : MonoBehaviour, IBuildable
     // Material[][] origMats, validMats, invalidMats;
     NavMeshObstacle[] navObstacles;
     BuildingSystem buildingSystem;
+    Renderer[] buildingVisuals;
 
     public void Initialize(BuildingSystem bs) {
         if(!initialized) {
@@ -50,6 +54,8 @@ public class BuildingSystemObject : MonoBehaviour, IBuildable
             //     }
             // }
             navObstacles = GetComponentsInChildren<NavMeshObstacle>();
+            if(buildingVisualsParent)
+                buildingVisuals = buildingVisualsParent.GetComponentsInChildren<Renderer>();
 
             initialized = true;
         }
@@ -96,7 +102,13 @@ public class BuildingSystemObject : MonoBehaviour, IBuildable
                     cols[i].gameObject.layer = origColLayers[i];
             }
         }
-        Destroy(rb);
+        if(keepActiveRb) {
+            rb.isKinematic = false;
+        }
+        else {
+            Destroy(rb);
+        }
+        
         // rb.isKinematic = true;
         // rb.detectCollisions = false;
 
@@ -156,11 +168,14 @@ public class BuildingSystemObject : MonoBehaviour, IBuildable
     // }
 
     public void OnToggleBuildableVisual(bool b) {
+        if(buildingVisuals == null) return;
         foreach(var r in buildingVisuals)
             r.enabled = b;
+            
+        onToggleVisuals?.Invoke(b);
     }
     public void OnToggleBuildableEdit(bool b) {
-        
+        onToggleEdit?.Invoke(b);
     }
 }
 }

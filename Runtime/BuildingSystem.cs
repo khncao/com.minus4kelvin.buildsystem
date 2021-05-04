@@ -65,6 +65,7 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
     public float snapMov = 0.5f;
     public int snapRot = 45;
     public int buildingLayer, builtLayer;
+    public LayerMask buildModeLayers;
     public Item currItem;
 
     [System.NonSerialized]
@@ -321,6 +322,9 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
                 currObjInstance.transform.SetParent(null);
             }
             builtItems[instanceId].parentId = parentInd;
+        } 
+        else {
+            currObjInstance.transform.SetParent(null);
         }
 
         UpdateBuiltPosRotRecurs(currBuiltItem);
@@ -449,6 +453,13 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
         }
         SetToggleBuildableVisuals(false);
     }
+    public void Serialize(ref BuildingSystemData data) {
+        data.builtItems = this.builtItems;
+    }
+    public void Deserialize(ref BuildingSystemData data) {
+        this.builtItems = data.builtItems;
+    }
+
     // public void Serialize(ref GameDataWriter writer) {
     //     writer.Write(builtItems.Count);
         

@@ -4,7 +4,7 @@ using UnityEngine;
 using m4k.InventorySystem;
 
 namespace m4k.BuildSystem {
-[CreateAssetMenu(fileName = "ItemBuildable", menuName = "ScriptableObjects/ItemBuildable")]
+[CreateAssetMenu(fileName = "ItemBuildable", menuName = "ScriptableObjects/Items/ItemBuildable")]
 public class ItemBuildable : Item {
     // [Header("Buildable")]
     public override void SingleClick(ItemSlot slot)
