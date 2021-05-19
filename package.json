@@ -6,7 +6,7 @@
   "unity": "2019.1",
   "dependencies": {
     "com.minus4kelvin.core": "1.0.0",
-    "com.unity.textmeshpro": ""
+    "com.unity.textmeshpro": "3.0.6"
   },
   "keywords": [
     "build"

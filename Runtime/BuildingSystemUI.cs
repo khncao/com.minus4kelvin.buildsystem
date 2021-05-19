@@ -16,6 +16,10 @@ public class BuildingSystemUI : MonoBehaviour
     }
     public CanvasGroup canvasGroup;
     public GameObject objectButtonPrefab;
+    public Toggle collapseToggle;
+    public RectTransform[] collapsibleRTs;
+    public float yExpanded, yCollapsed;
+    public bool collapsed;
     public ScrollRect scroll;
     public GameObject serveButtonsParent, waitButtonsParent;
     public Button toggleGroupZonesButton;
@@ -68,6 +72,8 @@ public class BuildingSystemUI : MonoBehaviour
         OnToggleZoneTypes();
         snapToggle.isOn = buildingSystem.isSnapping;
         snapToggle.onValueChanged.AddListener(OnSnapToggle);
+        collapseToggle.onValueChanged.AddListener(OnToggleCollapse);
+        snapToggle.isOn = collapsed;
     }
 
     public void ToggleBuildMode(bool b) {
@@ -82,7 +88,10 @@ public class BuildingSystemUI : MonoBehaviour
         }
         // buildItemSlotManager.AssignInventory(buildItemLists[listInd].inv);
         // Game.Inventory.ToggleBuild(x=>x.item.HasTag(buildItemLists[listInd].tag));
-        buildingSystem.ToggleBuildTab(x=>x.item.HasTag(buildItemLists[listInd].tag));
+        if(buildItemLists[listInd].tag == ItemTag.Consumable)
+            buildingSystem.ToggleBuildTab(x=>!x.item.HasTag(ItemTag.Zone));
+        else
+            buildingSystem.ToggleBuildTab(x=>x.item.HasTag(buildItemLists[listInd].tag));
         
         scroll.normalizedPosition = Vector2.zero;
     }   
@@ -111,6 +120,18 @@ public class BuildingSystemUI : MonoBehaviour
 
     void OnSnapToggle(bool on) {
         buildingSystem.isSnapping = on;
+    }
+
+    void OnToggleCollapse(bool b) {
+        collapsed = b;
+        for(int i = 0; i < collapsibleRTs.Length; ++i) {
+            if(collapsed) {
+                collapsibleRTs[i].sizeDelta = new Vector2(collapsibleRTs[i].rect.width, yCollapsed);
+            }
+            else {
+                collapsibleRTs[i].sizeDelta = new Vector2(collapsibleRTs[i].rect.width, yExpanded);
+            }
+        }
     }
 }
 }
