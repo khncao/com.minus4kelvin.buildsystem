@@ -1,0 +1,19 @@
+{
+    "name": "com.minus4kelvin.BuildSystem.Editor",
+    "rootNamespace": "",
+    "references": [
+        "GUID:c18bd4b5d7a2f1243890ac0ba13019f8",
+        "GUID:b39e51532aaf1aa42afe103341854a22"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
