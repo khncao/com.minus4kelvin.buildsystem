@@ -5,6 +5,8 @@ using UnityEditor;
 using m4k.BuildSystem;
 using m4k.InventorySystem;
 
+
+namespace m4k {
 #if UNITY_EDITOR
 public class GenerateItemFromPrefab : MonoBehaviour
 {
@@ -81,3 +83,4 @@ public class GenerateItemFromPrefab : MonoBehaviour
     }
 }
 #endif
+}
