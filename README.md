@@ -2,7 +2,6 @@
 
 ### Dependencies
 - https://github.com/khncao/com.minus4kelvin.core 
-- TextMeshPro
 - Tested working on Unity 2020.3.6f1+
 
 ### Buildable Prefab Hierarchy

@@ -21,15 +21,10 @@ public class BuildingSystemUI : MonoBehaviour
     public float yExpanded, yCollapsed;
     public bool collapsed;
     public ScrollRect scroll;
-    public GameObject serveButtonsParent, waitButtonsParent;
-    public Button toggleGroupZonesButton;
-    public Button createServeZoneButton1, createServeZoneButton2, createWaitZoneButton1, createWaitZoneButton2;
     public Toggle snapToggle;
-    public Item[] serveZoneItems, waitZoneItems;
     public List<BuildItemList> buildItemLists;
     public ItemSlotHandler buildItemSlotManager;
 
-    TMPro.TMP_Text toggleZoneText;
     BuildingSystem buildingSystem;
 
     private void OnDisable() {
@@ -63,13 +58,6 @@ public class BuildingSystemUI : MonoBehaviour
         }
         OnToggle(buildItemLists[0].toggle);
 
-        createServeZoneButton1.onClick.AddListener(()=>OnButtonClick(serveZoneItems[0]));
-        createServeZoneButton2.onClick.AddListener(()=>OnButtonClick(serveZoneItems[1]));
-        createWaitZoneButton1.onClick.AddListener(()=>OnButtonClick(waitZoneItems[0]));
-        createWaitZoneButton2.onClick.AddListener(()=>OnButtonClick(waitZoneItems[1]));
-        toggleGroupZonesButton.onClick.AddListener(()=>OnToggleZoneTypes());
-        toggleZoneText = toggleGroupZonesButton.GetComponentInChildren<TMPro.TMP_Text>();
-        OnToggleZoneTypes();
         snapToggle.isOn = buildingSystem.isSnapping;
         snapToggle.onValueChanged.AddListener(OnSnapToggle);
         collapseToggle.onValueChanged.AddListener(OnToggleCollapse);
@@ -98,24 +86,6 @@ public class BuildingSystemUI : MonoBehaviour
 
     void OnButtonClick(Item item) {
         buildingSystem.SetBuildObject(item);
-    }
-    int currType = 1;
-    void OnToggleZoneTypes() {
-        currType = (currType + 1) % 2;
-        switch(currType) {
-            case 0:
-                toggleGroupZonesButton.targetGraphic.color = Color.yellow;
-                toggleZoneText.text = "Serve";
-                serveButtonsParent.SetActive(true);
-                waitButtonsParent.SetActive(false);
-                break;
-            case 1:
-                toggleGroupZonesButton.targetGraphic.color = Color.cyan;
-                toggleZoneText.text = "Queue";
-                serveButtonsParent.SetActive(false);
-                waitButtonsParent.SetActive(true);
-                break;
-        }
     }
 
     void OnSnapToggle(bool on) {
