@@ -1,7 +1,7 @@
 
 using UnityEditor;
 using UnityEngine;
-using m4k.InventorySystem;
+using m4k.Items;
 
 namespace m4k.BuildSystem {
 [CreateAssetMenu(fileName = "ItemBuildable", menuName = "ScriptableObjects/Items/ItemBuildable")]
