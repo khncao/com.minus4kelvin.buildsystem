@@ -90,7 +90,7 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
 
         buildableInventory = InventoryManager.I.GetOrRegisterInventory("buildable", 100, 0, true);
         buildableInventory.condHide = true;
-        var items = AssetRegistry.I.GetItemListByType(ItemType.Buildable);
+        var items = AssetRegistry.I.GetItemListByType(typeof(ItemBuildable));
         foreach(var i in items)
             buildableInventory.AddItemAmount(i, 1);
 
