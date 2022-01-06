@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using m4k.BuildSystem;
-using m4k.InventorySystem;
+using m4k.Items;
 
+
+namespace m4k {
 #if UNITY_EDITOR
 public class GenerateItemFromPrefab : MonoBehaviour
 {
@@ -20,7 +22,7 @@ public class GenerateItemFromPrefab : MonoBehaviour
         var objs = Selection.gameObjects;
         for(int i = 0; i < objs.Length; ++i) {
             var newItem = ScriptableObject.CreateInstance<ItemBuildable>();
-            newItem.itemName = objs[i].name;
+            newItem.displayName = objs[i].name;
             newItem.itemType = ItemType.Buildable;
             newItem.maxAmount = 999;
             // newItem.itemType = itemType;
@@ -50,7 +52,7 @@ public class GenerateItemFromPrefab : MonoBehaviour
         var objs = Selection.gameObjects;
         for(int i = 0; i < objs.Length; ++i) {
             var newItem = ScriptableObject.CreateInstance<Item>();
-            newItem.itemName = objs[i].name;
+            newItem.displayName = objs[i].name;
             newItem.itemType = ItemType.Equip;
             newItem.prefab = objs[i];
             // newItem.prefabRef = new UnityEngine.AddressableAssets.AssetReferenceT<GameObject>(GetGUID(objs[i]));
@@ -81,3 +83,4 @@ public class GenerateItemFromPrefab : MonoBehaviour
     }
 }
 #endif
+}

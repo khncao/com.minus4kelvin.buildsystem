@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.AI;
-using m4k.InventorySystem;
+using m4k.Items;
 
 namespace m4k.BuildSystem {
 // [RequireComponent(typeof(Rigidbody))]

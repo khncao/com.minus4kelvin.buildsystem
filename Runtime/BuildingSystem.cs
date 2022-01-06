@@ -1,8 +1,7 @@
 ﻿// using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using m4k.InventorySystem;
-using m4k.Characters;
+using m4k.Items;
 // public class BuildType {
 //     // string name;
 //     // int value;
@@ -88,14 +87,14 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
         if(!UI)
             UI = GetComponentInChildren<BuildingSystemUI>();
 
-        buildableInventory = InventoryManager.I.GetOrRegisterInventory("buildable", 100, 0, true);
+        buildableInventory = InventoryManager.I.GetOrRegisterSavedInventory("buildable", 100, 0, true);
         buildableInventory.condHide = true;
-        var items = AssetRegistry.I.GetItemListByType(ItemType.Buildable);
+        var items = AssetRegistry.I.GetItemListByType(typeof(ItemBuildable));
         foreach(var i in items)
             buildableInventory.AddItemAmount(i, 1);
 
         UI.Init(this);
-        builtItems = new List<BuiltItem>();
+        // builtItems = new List<BuiltItem>();
         buildables = new Dictionary<BuiltItem, IBuildable[]>();
         buildingLayer = LayerMask.NameToLayer("Immaterial");
         builtLayer = LayerMask.NameToLayer("Buildable");
@@ -140,22 +139,23 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
 
     void OnSceneChanged() {
         if(SceneHandler.I.isMainMenu) {
-            builtItems.Clear();
-            buildables.Clear();
+            // builtItems.Clear();
+            // buildables.Clear();
             return;
         }
         SpawnSceneObjInstances();
     }
 
     public List<BuiltItem> GetOrAddBuiltItemsListByTag(ItemTag tag) {
-        List<BuiltItem> builtItems;
-        builtItemLists.TryGetValue(tag, out builtItems);
-        if(builtItems == null) {
-            builtItems = new List<BuiltItem>();
-            builtItemLists.Add(tag, builtItems);
+        List<BuiltItem> builtItemsList;
+        builtItemLists.TryGetValue(tag, out builtItemsList);
+        if(builtItemsList == null) {
+            builtItemsList = new List<BuiltItem>();
+            builtItemLists.Add(tag, builtItemsList);
         }
-        return builtItems;
+        return builtItemsList;
     }
+
     Inventory GetInventory(ItemTag tag) {
         Inventory inv;
         tagInv.TryGetValue(tag, out inv);
@@ -163,25 +163,30 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
             Debug.LogWarning("Build inv not found");
         return inv;
     }
+
     public void AddBuildItem(Item item, int amount) {
         if(item.itemTags[0] == ItemTag.Zone) return;
         // Inventory inv = GetInventory(item.itemTags[0]);
         buildableInventory.AddItemAmount(item, amount);
     }
+
     public void RemoveBuildItem(Item item, int amount) {
         if(item.itemTags[0] == ItemTag.Zone) return;
         // Inventory inv = GetInventory(item.itemTags[0]);
         buildableInventory.RemoveItemAmount(item, amount, true);
     }
+
     public void ToggleBuildTab(System.Predicate<ItemInstance> filter) {
         UI.buildItemSlotManager.AssignInventory(buildableInventory, filter);
     }
+
     public void ToggleBuildMode() {
         CancelInput();
         UI.ToggleBuildMode(!buildSystemUIParent.activeInHierarchy);
         isBuilding = buildSystemUIParent.activeInHierarchy;
         SetToggleBuildableVisuals(isBuilding);
     }
+
     public void Cleanup() {
         if(currObjInstance)
             DestroyBuiltObjRecurs(currBuiltItem);
@@ -291,7 +296,7 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
         if(instanceId == -1) {
             currBuiltItem = new BuiltItem(); 
             currBuiltItem.item = currItem;
-            currBuiltItem.name = currItem.itemName;
+            currBuiltItem.name = currItem.name;
             currBuiltItem.instance = currObjInstance;
             currBuiltItem.objComponent = currBuildComponent;
             currBuiltItem.renderer = currObjInstance.GetComponentInChildren<Renderer>();
@@ -359,6 +364,7 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
         builtItem.objComponent.Initialize(this);
         UpdateItemTypes(builtItem, false);
     }
+
     void FinalizeBuildObjRecurs(BuiltItem builtItem) {
         for(int i = 0; i < builtItem.children.Count; ++i) {
             FinalizeBuildObjRecurs(builtItem.children[i]);
@@ -366,6 +372,7 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
         UpdateItemTypes(builtItem, true);
         builtItem.objComponent.FinalizePlacement();
     }
+
     void UpdateBuiltPosRotRecurs(BuiltItem builtItem) {
         for(int i = 0; i < builtItem.children.Count; ++i) {
             UpdateBuiltPosRotRecurs(builtItem.children[i]);
@@ -414,6 +421,7 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
         isCollideSnap = snappable;
         otherCollider = other;
     }
+    
     public void SetToggleBuildableVisuals(bool b) {
         foreach(var i in buildables.Values) {
             foreach(var j in i) {
@@ -422,7 +430,7 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
         }
     }
     
-    public void SpawnSceneObjInstances() {
+    void SpawnSceneObjInstances() {
         Debug.Log("Build scene change, items: " + builtItems.Count);
         for(int i = 0; i < builtItems.Count; ++i) {
             BuiltItem builtItem = builtItems[i];
@@ -430,7 +438,7 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
                 builtItems[i].item = AssetRegistry.I.GetItemFromName(builtItems[i].name);
             }
             if(builtItem.sceneId != SceneHandler.I.activeScene.buildIndex) {
-                Debug.Log(builtItem.item.itemName + " not in this scene");
+                Debug.Log(builtItem.item.displayName + " not in this scene");
             }
 
             if(builtItem.sceneId == SceneHandler.I.activeScene.buildIndex && !builtItem.instance) {
@@ -453,6 +461,7 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
         }
         SetToggleBuildableVisuals(false);
     }
+
     public void Serialize(ref BuildingSystemData data) {
         data.builtItems = this.builtItems;
     }
