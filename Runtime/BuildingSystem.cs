@@ -87,8 +87,8 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
         if(!UI)
             UI = GetComponentInChildren<BuildingSystemUI>();
 
-        buildableInventory = InventoryManager.I.GetOrRegisterSavedInventory("buildable", 100, 0, true);
-        buildableInventory.condHide = true;
+        buildableInventory = InventoryManager.I.GetOrRegisterSavedInventory("buildable", 100);
+        buildableInventory.keepZeroItems = true;
         var items = AssetRegistry.I.GetItemListByType(typeof(ItemBuildable));
         foreach(var i in items)
             buildableInventory.AddItemAmount(i, 1);
