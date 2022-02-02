@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using m4k.Items;
 
 namespace m4k.BuildSystem {
@@ -36,23 +37,6 @@ public class BuildingSystemUI : MonoBehaviour
         buildingSystem = bs;
 
         for(int i = 0; i < buildItemLists.Count; ++i) {
-            // buildItemLists[i].inv = Game.Inventory.GetOrRegisterInventory("build" + buildItemLists[i].tag.ToString(), 100, 0, true);
-            
-            // if inventory for category not initialized, initialize
-            // TODO: change from complete static db list to base+progressive
-            // static list, lock at 0 quant; toggle hide locked
-
-            // if(buildItemLists[i].inv != null && buildItemLists[i].inv.totalItemsList.Count == 0) {
-            //     var list = Game.AssetRegistry.GetItemListByTag(buildItemLists[i].tag);
-            //     if(list == null) {
-            //         Debug.Log($"No {buildItemLists[i].tag} found");
-            //         continue;
-            //     }
-            //     for(int j = 0; j < list.Count; ++j) {
-            //         buildItemLists[i].inv.AddItemAmount(list[j], 1, false);
-            //     }
-            // }
-
             var tog = buildItemLists[i].toggle;
             tog.onValueChanged.AddListener(delegate { OnToggle(tog); });
         }
@@ -66,6 +50,7 @@ public class BuildingSystemUI : MonoBehaviour
 
     public void ToggleBuildMode(bool b) {
         gameObject.SetActive(b);
+        EventSystem.current.SetSelectedGameObject(buildItemSlotManager.slots[0].gameObject);
     }
 
     public void OnToggle(Toggle changed) {
@@ -82,6 +67,7 @@ public class BuildingSystemUI : MonoBehaviour
             buildingSystem.ToggleBuildTab(x=>x.item.HasTag(buildItemLists[listInd].tag));
         
         scroll.normalizedPosition = Vector2.zero;
+        EventSystem.current.SetSelectedGameObject(buildItemSlotManager.slots[0].gameObject);
     }   
 
     void OnButtonClick(Item item) {
