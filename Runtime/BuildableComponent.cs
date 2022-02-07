@@ -13,5 +13,8 @@ public class BuildableComponent : MonoBehaviour, IBuildable {
     public void OnToggleBuildableEdit(bool b) {
         onToggleEdit?.Invoke(b);
     }
+    public bool CanEdit() {
+        return true;
+    }
 }
 }

@@ -2,42 +2,24 @@
 using System.Collections.Generic;
 using UnityEngine;
 using m4k.Items;
-// public class BuildType {
-//     // string name;
-//     // int value;
-//     // public static readonly BuildType Light = new BuildType("Light", 0);
-//     public static readonly string Light = "Light";
-//     public static readonly string Floor = "Floor";
-//     public static readonly string Table = "Table";
-//     public static readonly string Seat = "Seat";
-//     public static readonly string Prop = "Prop";
-//     public static readonly string Zone = "Zone";
-//     public static readonly string Wall = "Wall";
-//     // public BuildType(string n, int v) {
-//     //     name = n;
-//     //     value = v;
-//     // }
-//     // public override string ToString() { return name; }
-//     // public int GetValue() { return value; }
 
-// }
 namespace m4k.BuildSystem {
 
 [System.Serializable]
 public class BuildingSystemData {
-    public List<BuildingSystem.BuiltItem> builtItems;
+    public SerializableDictionary<string, List<BuildingSystem.BuiltItem>> sceneBuiltItems;
 }
 
 [System.Serializable]
-public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
+public class BuildingSystem : Singleton<BuildingSystem>
 {
     [System.Serializable]
     public class BuiltItem {
         public string name;
         public Vector3 pos;
         public Quaternion rot;
-        public int sceneId;
         public int parentId;
+        public string guid;
         
         [System.NonSerialized]
         public Item item;
@@ -46,47 +28,51 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
         [System.NonSerialized]
         public BuildingSystemObject objComponent;
         [System.NonSerialized]
-        public Renderer renderer;
-        [System.NonSerialized]
         public List<BuiltItem> children = new List<BuiltItem>();
-        // public ItemTag tag { get { return item.itemTags[0]; }}
     }
     public BuildingSystemUI UI;
     public AudioClip placeAudioClip;
-    public List<BuiltItem> builtItems;
     public Material invalidPlacementMat;
     public Material validPlacementMat;
     public Material highlightMat;
     public GameObject buildSystemUIParent;
     public Inventory buildableInventory;
-    public bool isSnapping;
+    public List<ItemTag> ignoreQuantityTags;
+
     public float rotSpeed = 1;
     public float snapMov = 0.5f;
     public int snapRot = 45;
     public int buildingLayer, builtLayer;
+    [Header("Layers that detect placement raycasts")]
     public LayerMask buildModeLayers;
     public Item currItem;
 
-    [System.NonSerialized]
-    public bool isBuilding;
-    public bool shiftMod;
+    public bool isBuilding { get; set; }
+    public bool isSnapping { get; set; }
+    public bool shiftMod { get; set; }
 
     GameObject currObjInstance;
     Item prevItem;
     BuiltItem currBuiltItem;
     BuildingSystemObject currBuildComponent;
     Transform currObjTransform, prevObjTransform;
-    bool isCollideSnap, prevRot;
-    Vector3 prevPos;
-    Collider otherCollider, currObjCol;
-    Dictionary<BuiltItem, IBuildable[]> buildables;
-    Dictionary<ItemTag, Inventory> tagInv = new Dictionary<ItemTag, Inventory>();
+    
+    string currSceneName;
+    float currFloorHeight = 0f;
+
+    List<BuiltItem> currBuiltItems;
+    SerializableDictionary<string, List<BuiltItem>> sceneBuiltItems = new SerializableDictionary<string, List<BuiltItem>>();
+
+    // managed collection of ibuildables on builtItems; for aux event processing
+    Dictionary<BuiltItem, IBuildable[]> builtBuildables = new Dictionary<BuiltItem, IBuildable[]>();
+    // fetch list of built items by itemtag
     Dictionary<ItemTag, List<BuiltItem>> builtItemLists = new Dictionary<ItemTag, List<BuiltItem>>();
 
     private void Start() {
         if(!UI)
             UI = GetComponentInChildren<BuildingSystemUI>();
 
+        // TODO: better inventory management for expandability
         buildableInventory = InventoryManager.I.GetOrRegisterSavedInventory("buildable", 100);
         buildableInventory.keepZeroItems = true;
         var items = AssetRegistry.I.GetItemListByType(typeof(ItemBuildable));
@@ -94,15 +80,8 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
             buildableInventory.AddItemAmount(i, 1);
 
         UI.Init(this);
-        // builtItems = new List<BuiltItem>();
-        buildables = new Dictionary<BuiltItem, IBuildable[]>();
-        buildingLayer = LayerMask.NameToLayer("Immaterial");
-        builtLayer = LayerMask.NameToLayer("Buildable");
 
-        foreach(var i in UI.buildItemLists) {
-            tagInv.Add(i.tag, i.inv);
-        }
-
+        SceneHandler.I.onSceneChanged -= OnSceneChanged;
         SceneHandler.I.onSceneChanged += OnSceneChanged;
     }
 
@@ -124,26 +103,29 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
         return pos;
     }
 
-    public Vector3 GetRandomFloorPosition() {
-        var floors = GetOrAddBuiltItemsListByTag(ItemTag.Floor);
-        var randFloor = Random.Range(0, floors.Count);
-
-        return floors[randFloor].pos;
-    }
-    public Vector3 GetRandomTable() {
-        var tables = GetOrAddBuiltItemsListByTag(ItemTag.Table);
-        var randTable = Random.Range(0, tables.Count);
-
-        return tables[randTable].pos;
-    }
-
     void OnSceneChanged() {
         if(SceneHandler.I.isMainMenu) {
-            // builtItems.Clear();
-            // buildables.Clear();
             return;
         }
-        SpawnSceneObjInstances();
+        // if current scene and current scene is equivalent to new scene, return
+        if(!string.IsNullOrEmpty(currSceneName) 
+        && SceneHandler.I.activeScene.name == currSceneName)
+            return;
+
+        // if active scene has built items, spawn and initiate
+        if(sceneBuiltItems.TryGetValue(SceneHandler.I.activeScene.name, out currBuiltItems))
+            SpawnSceneObjInstances();
+    }
+
+    /// <summary>
+    /// Update or create built items list for current active scene. Only create entry in scenes that allow building; call when intializing new builtItem
+    /// </summary>
+    void UpdateCurrentSceneBuiltItems() {
+        currSceneName = SceneHandler.I.activeScene.name;
+        if(!sceneBuiltItems.TryGetValue(currSceneName, out currBuiltItems)) {
+            currBuiltItems = new List<BuiltItem>();
+            sceneBuiltItems.Add(currSceneName, currBuiltItems);
+        }
     }
 
     public List<BuiltItem> GetOrAddBuiltItemsListByTag(ItemTag tag) {
@@ -156,48 +138,55 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
         return builtItemsList;
     }
 
-    Inventory GetInventory(ItemTag tag) {
-        Inventory inv;
-        tagInv.TryGetValue(tag, out inv);
-        if(inv == null) 
-            Debug.LogWarning("Build inv not found");
-        return inv;
-    }
+    // Buildable inventory management
 
     public void AddBuildItem(Item item, int amount) {
-        if(item.itemTags[0] == ItemTag.Zone) return;
-        // Inventory inv = GetInventory(item.itemTags[0]);
+        foreach(var tag in ignoreQuantityTags)
+            if(item.HasTag(tag)) return;
         buildableInventory.AddItemAmount(item, amount);
     }
 
     public void RemoveBuildItem(Item item, int amount) {
-        if(item.itemTags[0] == ItemTag.Zone) return;
-        // Inventory inv = GetInventory(item.itemTags[0]);
+        foreach(var tag in ignoreQuantityTags)
+            if(item.HasTag(tag)) return;
         buildableInventory.RemoveItemAmount(item, amount, true);
     }
 
+
+    /// <summary>
+    /// Used by UI to assign buildable item inventory based on predicate.
+    /// </summary>
+    /// <param name="filter">Predicate to filter items</param>
     public void ToggleBuildTab(System.Predicate<ItemInstance> filter) {
         UI.buildItemSlotManager.AssignInventory(buildableInventory, filter);
     }
 
+    /// <summary>
+    /// Main build mode toggle
+    /// </summary>
     public void ToggleBuildMode() {
         CancelInput();
         UI.ToggleBuildMode(!buildSystemUIParent.activeInHierarchy);
         isBuilding = buildSystemUIParent.activeInHierarchy;
-        SetToggleBuildableVisuals(isBuilding);
+        ToggleAllBuildableVisuals(isBuilding);
     }
 
+    /// <summary>
+    /// If actively editing/placing buildable object, destroy it and its children
+    /// </summary>
     public void Cleanup() {
         if(currObjInstance)
             DestroyBuiltObjRecurs(currBuiltItem);
     }
+
+    // Input methods
 
     public void HitInput(RaycastHit hit) {
         if(!currObjInstance) return;
 
         Vector3 pos = hit.point + Vector3.up * 0.01f;
         if(currItem && currItem.HasTag(ItemTag.Floor)) 
-            pos.y = 0;
+            pos.y = currFloorHeight;
         
         if(isSnapping) {
             pos.x = Mathf.Round(pos.x / snapMov) * snapMov;
@@ -205,6 +194,7 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
         }
         currObjTransform.position = pos;
     }
+
     public void ConfirmInput(RaycastHit hit) {
         if(currObjInstance) {
             if(!buildObjColliding) {
@@ -223,153 +213,184 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
             EditBuildObject(hit.transform.parent.gameObject);
         }
     }
+
     public void CancelInput() {
         if(!currObjInstance) return;
 
         UI.canvasGroup.FadeIn();
         DestroyBuiltObjRecurs(currBuiltItem);
     }
+
     public void RotateLeft() {
         if(!currObjInstance) return;
 
-        if(!currItem.HasTag(ItemTag.Zone)) {
-            var rot = isSnapping ? snapRot : rotSpeed;
-            currObjTransform.Rotate(0, -rot, 0);
-        }
+        var rot = isSnapping ? snapRot : rotSpeed;
+        currObjTransform.Rotate(0, -rot, 0);
     }
+
     public void RotateRight() {
         if(!currObjInstance) return;
 
-        if(!currItem.HasTag(ItemTag.Zone)) {
-            var rot = isSnapping ? snapRot : rotSpeed;
-            currObjTransform.Rotate(0, rot, 0);
-        }
+        var rot = isSnapping ? snapRot : rotSpeed;
+        currObjTransform.Rotate(0, rot, 0);
     }
 
-    public void SetBuildObject(Item item) {
+    /// <summary>
+    /// Start editing/placing item
+    /// </summary>
+    /// <param name="item"></param>
+    public void SetBuildObject(Item item, bool forceBuildMode = false) {
         if(currObjInstance) {
             return;
         }
-        Debug.Log($"Set buildable {item.name}");
+        if(forceBuildMode && !isBuilding) {
+            ToggleBuildMode();
+        }
+        // Debug.Log($"Set buildable {item.name}");
         currItem = item;
         var rot = shiftMod && prevObjTransform ? prevObjTransform.rotation : item.prefab.transform.rotation;
-        GameObject obj = Instantiate(item.prefab, Vector3.up * 50, rot);
+        GameObject obj = Instantiate(item.prefab, Vector3.down * 50f, rot);
 
         EditBuildObject(obj);
     }
 
+    /// <summary>
+    /// Begin placement/editing of a buildable object. Confirm BuildingSystemObject component and IBuildable CanEdit if existing. Called both when building new object from inventory and attempting to edit existing built object.
+    /// </summary>
+    /// <param name="instance">New prefab instance or existing built object</param>
     public void EditBuildObject(GameObject instance) {
         if(currBuiltItem != null)
             currBuildComponent = currBuiltItem.objComponent;
         if(!currBuildComponent)
-            // currBuildComponent = instance.GetComponentInChildren<Collider>().gameObject.GetComponentInChildren<BuildingSystemObject>();
             currBuildComponent = instance.GetComponentInChildren<BuildingSystemObject>();
-        // if(!currBuildComponent || !currBuildComponent.item) {
-        //     CleanBuildable();
-        //     return;
-        // }
+        if(!currBuildComponent)
+            Debug.LogWarning("No BuildingSystemObject on current buildable");
+
+        if(currBuildComponent.builtItem != null && builtBuildables.TryGetValue(currBuildComponent.builtItem, out var buildables)) {
+            foreach(var buildable in buildables)
+                if(!buildable.CanEdit()) {
+                    Feedback.I.SendLine($"Cannot edit {currBuildComponent.builtItem.item.displayName}");
+                    return;
+                }
+        }
 
         UI.canvasGroup.FadeOut();
         currObjInstance = instance;
         currObjTransform = instance.transform;
-        currObjCol = instance.GetComponentInChildren<Collider>();
-        prevPos = instance.transform.position;
 
         if(!currItem)
             currItem = currBuildComponent.item;
 
-        UpdateBuiltItems(null);
+        GetOrCreateBuiltItem(instance);
         InitBuildObjRecurs(currBuiltItem);
     }
 
+    /// <summary>
+    /// Called if actively placing/editing object and confirm input received. Finalizes build object placement, updates stored date, and cleans up stale references.
+    /// </summary>
+    /// <param name="newParent"></param>
     void PlaceBuildObject(Transform newParent) {
         RemoveBuildItem(currBuiltItem.item, 1);
         Feedback.I.PlayAudio(placeAudioClip);
         FinalizeBuildObjRecurs(currBuiltItem);
-        UpdateBuiltItems(newParent);
+        GetOrCreateBuiltItem(currObjInstance);
+        FinalizePlacement(newParent);
         CleanBuildable();
     }
 
-    void UpdateBuiltItems(Transform newParent) {
-        int instanceId = FindBuiltItemIndexFromInstance(currObjInstance);
+    /// <summary>
+    /// Get or create built item from instance. If created, initialize and add built item to collection.
+    /// </summary>
+    void GetOrCreateBuiltItem(GameObject instance) {
+        int instanceId = FindBuiltItemIndexFromInstance(instance);
 
         if(instanceId == -1) {
             currBuiltItem = new BuiltItem(); 
             currBuiltItem.item = currItem;
             currBuiltItem.name = currItem.name;
-            currBuiltItem.instance = currObjInstance;
-            currBuiltItem.objComponent = currBuildComponent;
-            currBuiltItem.renderer = currObjInstance.GetComponentInChildren<Renderer>();
-            currBuiltItem.sceneId = SceneHandler.I.activeScene.buildIndex;
+            currBuiltItem.instance = instance;
+            currBuiltItem.parentId = -1;
             
-            builtItems.Add(currBuiltItem);
-            GetOrAddBuiltItemsListByTag(currBuiltItem.item.itemTags[0]).Add(currBuiltItem);
-            Debug.Log("Num built items: " + builtItems.Count);
+            currBuiltItem.objComponent = currBuildComponent;
+            currBuiltItem.objComponent.Initialize(this, currBuiltItem);
+
+            if(currBuiltItem.objComponent.guidComponent)
+                currBuiltItem.guid = currBuiltItem.objComponent.guidComponent.GetGuid().ToString();
+
+            UpdateBuiltBuildables(currBuiltItem);
+            
+            UpdateCurrentSceneBuiltItems();
+            
+            currBuiltItems.Add(currBuiltItem);
+            foreach(var tag in currBuiltItem.item.itemTags)
+                GetOrAddBuiltItemsListByTag(tag).Add(currBuiltItem);
         }
         else {
-            currBuiltItem = builtItems[instanceId];
+            currBuiltItem = currBuiltItems[instanceId];
             currItem = currBuiltItem.item;
             currBuildComponent = currBuiltItem.objComponent;
         }
+    }
 
+    /// <summary>
+    /// Finalize parent-child relations; update active and stored transform information
+    /// </summary>
+    /// <param name="newParent"></param>
+    void FinalizePlacement(Transform newParent) {
         if(currBuiltItem.parentId != -1) {
-            builtItems[currBuiltItem.parentId].children.Remove(currBuiltItem);
+            currBuiltItems[currBuiltItem.parentId].children.Remove(currBuiltItem);
             currBuiltItem.parentId = -1;
         }
 
         if(newParent) {
             int parentInd = FindBuiltItemIndexFromInstance(newParent.gameObject);
             if(parentInd != -1) {
-                builtItems[parentInd].children.Add(currBuiltItem);
+                currBuiltItems[parentInd].children.Add(currBuiltItem);
                 currObjInstance.transform.SetParent(newParent, true);
             }
             else {
                 currObjInstance.transform.SetParent(null);
             }
-            builtItems[instanceId].parentId = parentInd;
+            currBuiltItem.parentId = parentInd;
         } 
         else {
             currObjInstance.transform.SetParent(null);
         }
 
         UpdateBuiltPosRotRecurs(currBuiltItem);
+
+        Debug.Log($"Built {currBuiltItem.item.displayName}; Num built items: {currBuiltItems.Count}");
     }
 
-    void UpdateItemTypes(BuiltItem builtItem, bool finalizing) {
+
+    /// <summary>
+    /// Build cache of IBuildables for built items. Called on built item initialization
+    /// </summary>
+    /// <param name="builtItem"></param>
+    void UpdateBuiltBuildables(BuiltItem builtItem) {
+        if(builtBuildables.ContainsKey(builtItem))
+            return;
         var buildableComps = builtItem.instance.GetComponentsInChildren<IBuildable>();
         if(buildableComps != null && buildableComps.Length > 0) {
-            if(!buildables.ContainsKey(builtItem))
-                buildables[builtItem] = buildableComps;
+            builtBuildables[builtItem] = buildableComps;
         }
-        ToggleBuildableEditing(builtItem, !finalizing);
     }
 
-    void ToggleBuildableEditing(BuiltItem builtItem, bool b) {
-        IBuildable[] t;
-        buildables.TryGetValue(builtItem, out t);
-        if(t != null) {
-            foreach(var i in t) {
-                if(b) {
-                    i.OnToggleBuildableVisual(b);
-                }
-                i.OnToggleBuildableEdit(b);
-            }
-        }
-    }
+    // Recursive methods for updating state of built item and its children
 
     void InitBuildObjRecurs(BuiltItem builtItem) {
         for(int i = 0; i < builtItem.children.Count; ++i) {
             InitBuildObjRecurs(builtItem.children[i]);
         }
-        builtItem.objComponent.Initialize(this);
-        UpdateItemTypes(builtItem, false);
+        builtItem.objComponent.StartPlacement();
+        ToggleBuildableEditing(builtItem, true);
     }
 
     void FinalizeBuildObjRecurs(BuiltItem builtItem) {
         for(int i = 0; i < builtItem.children.Count; ++i) {
             FinalizeBuildObjRecurs(builtItem.children[i]);
         }
-        UpdateItemTypes(builtItem, true);
+        ToggleBuildableEditing(builtItem, false);
         builtItem.objComponent.FinalizePlacement();
     }
 
@@ -387,18 +408,20 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
             DestroyBuiltObjRecurs(builtItem.children[i]);
         }
         Destroy(builtItem.instance);
-        builtItems.Remove(builtItem);
-        GetOrAddBuiltItemsListByTag(currBuiltItem.item.itemTags[0]).Remove(currBuiltItem);
+        currBuiltItems.Remove(builtItem);
+        foreach(var tag in currBuiltItem.item.itemTags)
+            GetOrAddBuiltItemsListByTag(tag).Remove(currBuiltItem);
         
-        if(buildables.ContainsKey(builtItem))
-            buildables.Remove(builtItem);
+        if(builtBuildables.ContainsKey(builtItem))
+            builtBuildables.Remove(builtItem);
 
         if(builtItem == currBuiltItem)
             CleanBuildable();
     }
 
+
     public int FindBuiltItemIndexFromInstance(GameObject instance) {
-        return builtItems.FindIndex(x=>x.instance == instance);
+        return currBuiltItems.FindIndex(x=>x.instance == instance);
     }
 
     void CleanBuildable() {
@@ -413,97 +436,108 @@ public class BuildingSystem : Singleton<BuildingSystem>//, IStateSerializable
     }
 
     bool buildObjColliding;
+    /// <summary>
+    /// Called by trigger events on buildingSystemObject components to set colliding flag
+    /// </summary>
+    /// <param name="colliding"></param>
+    /// <param name="snappable"></param>
+    /// <param name="other"></param>
     public void SetBuildObjectColliding(bool colliding, bool snappable, Collider other) {
         if(buildObjColliding == colliding) 
             return;
 
         buildObjColliding = colliding;
-        isCollideSnap = snappable;
-        otherCollider = other;
     }
     
-    public void SetToggleBuildableVisuals(bool b) {
-        foreach(var i in buildables.Values) {
+    /// <summary>
+    /// Toggle all building system visuals. Toggle with build mode active
+    /// </summary>
+    /// <param name="b"></param>
+    public void ToggleAllBuildableVisuals(bool b) {
+        foreach(var i in builtBuildables.Values) {
             foreach(var j in i) {
                 j.OnToggleBuildableVisual(b);
             }
         }
     }
-    
-    void SpawnSceneObjInstances() {
-        Debug.Log("Build scene change, items: " + builtItems.Count);
-        for(int i = 0; i < builtItems.Count; ++i) {
-            BuiltItem builtItem = builtItems[i];
-            if(!builtItems[i].item) {
-                builtItems[i].item = AssetRegistry.I.GetItemFromName(builtItems[i].name);
+
+    /// <summary>
+    /// Toggle with active object edit
+    /// </summary>
+    /// <param name="builtItem"></param>
+    /// <param name="enabled"></param>
+    void ToggleBuildableEditing(BuiltItem builtItem, bool enabled) {
+        if(builtBuildables.TryGetValue(builtItem, out var t))
+            foreach(var i in t) {
+                if(enabled) {
+                    i.OnToggleBuildableVisual(enabled);
+                }
+                i.OnToggleBuildableEdit(enabled);
             }
-            if(builtItem.sceneId != SceneHandler.I.activeScene.buildIndex) {
-                Debug.Log(builtItem.item.displayName + " not in this scene");
+    }
+    
+    /// <summary>
+    /// Spawn and initialize saved built items in current active scene. Called on scene change
+    /// </summary>
+    void SpawnSceneObjInstances() {
+        for(int i = 0; i < currBuiltItems.Count; ++i) {
+            BuiltItem builtItem = currBuiltItems[i];
+            if(!currBuiltItems[i].item) {
+                currBuiltItems[i].item = AssetRegistry.I.GetItemFromName(currBuiltItems[i].name);
             }
 
-            if(builtItem.sceneId == SceneHandler.I.activeScene.buildIndex && !builtItem.instance) {
+            if(!builtItem.instance) {
                 builtItem.instance = Instantiate(builtItem.item.prefab);
 
                 builtItem.instance.transform.position = builtItem.pos;
                 builtItem.instance.transform.rotation = builtItem.rot;
                 builtItem.objComponent = builtItem.instance.GetComponentInChildren<BuildingSystemObject>();
-                builtItem.renderer = builtItem.instance.GetComponentInChildren<Renderer>();
+                builtItem.objComponent.Initialize(this, builtItem);
 
-                UpdateItemTypes(builtItem, true);
+                if(!string.IsNullOrEmpty(builtItem.guid))
+                    builtItem.objComponent.guidComponent.SetGuid(builtItem.guid);
+
+                UpdateBuiltBuildables(builtItem);
             }
-            builtItems[i] = builtItem;
+
+            currBuiltItems[i] = builtItem;
         }
-        for(int i = 0; i < builtItems.Count; ++i) {
-            if(builtItems[i].sceneId == SceneHandler.I.activeScene.buildIndex && builtItems[i].parentId != -1) {
-                builtItems[i].instance.transform.SetParent(builtItems[builtItems[i].parentId].instance.transform, true);
-                builtItems[builtItems[i].parentId].children.Add(builtItems[i]);
+
+        for(int i = 0; i < currBuiltItems.Count; ++i) {
+            if(currBuiltItems[i].parentId != -1) {
+                var parent = currBuiltItems[currBuiltItems[i].parentId];
+                currBuiltItems[i].instance.transform.SetParent(parent.instance.transform, true);
+                parent.children.Add(currBuiltItems[i]);
             }
         }
-        SetToggleBuildableVisuals(false);
+        ToggleAllBuildableVisuals(false);
     }
 
     public void Serialize(ref BuildingSystemData data) {
-        data.builtItems = this.builtItems;
+        data.sceneBuiltItems = this.sceneBuiltItems;
     }
     public void Deserialize(ref BuildingSystemData data) {
-        this.builtItems = data.builtItems;
+        this.sceneBuiltItems = data.sceneBuiltItems;
     }
-
-    // public void Serialize(ref GameDataWriter writer) {
-    //     writer.Write(builtItems.Count);
-        
-    //     for(int i = 0; i < builtItems.Count; ++i) {
-    //         writer.Write(builtItems[i].item.guid);
-    //         writer.Write(builtItems[i].instance.transform.position);
-    //         writer.Write(builtItems[i].instance.transform.rotation);
-    //         writer.Write(builtItems[i].sceneId);
-    //         writer.Write(builtItems[i].parentId);
-    //     }
-    // }
-
-    // public void Deserialize(ref GameDataReader reader) {
-    //     int len = reader.ReadInt();
-    //     Debug.Log("Build items deserialized: " + len);
-
-    //     for(int i = 0; i < len; ++i) {
-    //         string guid = reader.ReadString();
-    //         Item itemN = AssetRegistry.I.GetItemFromGuid(guid);
-
-    //         BuiltItem builtItem = new BuiltItem() {
-    //             item = itemN,
-    //             pos = reader.ReadVector3(),
-    //             rot = reader.ReadQuaternion(),
-    //             sceneId = reader.ReadInt(),
-    //             parentId = reader.ReadInt(),
-    //         };
-
-    //         builtItems.Add(builtItem);
-    //     }
-    // }
 }
 
 public interface IBuildable {
+    /// <summary>
+    /// Enabled when any buildable is in edit/placement mode
+    /// </summary>
+    /// <param name="b"></param>
     void OnToggleBuildableEdit(bool b);
+
+    /// <summary>
+    /// Visuals are enabled when build mode is active
+    /// </summary>
+    /// <param name="b"></param>
     void OnToggleBuildableVisual(bool b);
+
+    /// <summary>
+    /// On built item selected, determine if can be editted
+    /// </summary>
+    /// <returns></returns>
+    bool CanEdit();
 }
 }

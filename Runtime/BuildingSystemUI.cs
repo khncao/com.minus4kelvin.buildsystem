@@ -12,8 +12,6 @@ public class BuildingSystemUI : MonoBehaviour
     public class BuildItemList {
         public Toggle toggle;
         public ItemTag tag;
-        [HideInInspector]
-        public Inventory inv;
     }
     public CanvasGroup canvasGroup;
     public GameObject objectButtonPrefab;
@@ -59,12 +57,8 @@ public class BuildingSystemUI : MonoBehaviour
             Debug.LogError("list not found");
             return;
         }
-        // buildItemSlotManager.AssignInventory(buildItemLists[listInd].inv);
-        // Game.Inventory.ToggleBuild(x=>x.item.HasTag(buildItemLists[listInd].tag));
-        if(buildItemLists[listInd].tag == ItemTag.Consumable)
-            buildingSystem.ToggleBuildTab(x=>!x.item.HasTag(ItemTag.Zone));
-        else
-            buildingSystem.ToggleBuildTab(x=>x.item.HasTag(buildItemLists[listInd].tag));
+
+        buildingSystem.ToggleBuildTab(x=>x.item.HasTag(buildItemLists[listInd].tag));
         
         scroll.normalizedPosition = Vector2.zero;
         EventSystem.current.SetSelectedGameObject(buildItemSlotManager.slots[0].gameObject);

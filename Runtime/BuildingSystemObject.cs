@@ -6,101 +6,110 @@ using UnityEngine.AI;
 using m4k.Items;
 
 namespace m4k.BuildSystem {
-// [RequireComponent(typeof(Rigidbody))]
 public class BuildingSystemObject : MonoBehaviour, IBuildable
 {
+    [Header("Rb and cols should be on or in children of this object.\nThis object should be direct child of prefab root")]
     public Item item;
-    public Collider[] cols;
-    // public Renderer[] renderers;
-    public Rigidbody rb;
+    public bool allowEdit = true;
     public bool keepActiveRb = false;
+    [Header("Specific ignores for collision detection")]
+    public LayerMask ignoreLayers;
+    public List<string> ignoreTags;
+    [Header("Visuals are build mode only markers such as directional")]
     public Transform buildingVisualsParent;
+    [Header("Optional for aux serialize(inventory)")]
+    public GuidComponent guidComponent;
     public UnityEvent<bool> onToggleVisuals, onToggleEdit;
 
+    public BuildingSystem.BuiltItem builtItem { get; set; }
+
     int[] origColLayers;
+    bool[] origColTriggers;
     bool initialized;
     bool beingBuilt;
     MaterialsReplacer materialsReplacer;
-    LayerMask charLayer;
-    // Material[][] origMats, validMats, invalidMats;
     NavMeshObstacle[] navObstacles;
     BuildingSystem buildingSystem;
     Renderer[] buildingVisuals;
+    Collider[] cols;
+    Rigidbody rb;
 
-    public void Initialize(BuildingSystem bs) {
+    /// <summary>
+    /// Should be called once before starting placement. Initialize references
+    /// </summary>
+    /// <param name="bs"></param>
+    /// <param name="builtItem"></param>
+    public void Initialize(BuildingSystem bs, BuildingSystem.BuiltItem builtItem) {
         if(!initialized) {
             buildingSystem = bs;
             
+            this.builtItem = builtItem;
             if(!item)
                 item = buildingSystem.currItem;
-            charLayer = LayerMask.NameToLayer("Character");
+
             cols = GetComponentsInChildren<Collider>();
             origColLayers = new int[cols.Length];
+            origColTriggers = new bool[cols.Length];
+
             materialsReplacer = GetComponent<MaterialsReplacer>();
             if(!materialsReplacer)
                 materialsReplacer = gameObject.AddComponent<MaterialsReplacer>();
             materialsReplacer.RegisterReplacementMat(new Material[] {buildingSystem.invalidPlacementMat, buildingSystem.validPlacementMat});
-            // renderers = GetComponentsInChildren<Renderer>();
-            // validMats = new Material[renderers.Length][];
-            // invalidMats = new Material[renderers.Length][];
-            // origMats = new Material[renderers.Length][];
 
-            // for(int i = 0; i < renderers.Length; ++i) {
-            //     validMats[i] = new Material[renderers[i].materials.Length];
-            //     invalidMats[i] = new Material[renderers[i].materials.Length];
-            //     for(int j = 0; j < renderers[i].materials.Length; ++j) {
-            //         validMats[i][j] = buildingSystem.validPlacementMat;
-            //         invalidMats[i][j] = buildingSystem.invalidPlacementMat;
-            //     }
-            // }
             navObstacles = GetComponentsInChildren<NavMeshObstacle>();
+
             if(buildingVisualsParent)
                 buildingVisuals = buildingVisualsParent.GetComponentsInChildren<Renderer>();
 
             initialized = true;
         }
-        StartPlacement();
     }
-    void StartPlacement() {
+
+    /// <summary>
+    /// Begin object placement mode. Relevant state is cached for restoration. Layers are set to specific building layer, colliders are flagged as triggers. NavmeshObstacles are disabled. Materials are initially set to valid. Rigidbody is found or added, then initialized for building.
+    /// </summary>
+    public void StartPlacement() {
         beingBuilt = true;
+        bool builtLayerFound = false;
 
         for(int i = 0; i < cols.Length; ++i) {
             origColLayers[i] = cols[i].gameObject.layer;
+            origColTriggers[i] = cols[i].isTrigger;
 
-            if(item.HasTag(ItemTag.Zone) && origColLayers[i] != buildingSystem.builtLayer) {
-                // cols[i].gameObject.layer = buildingSystem.triggerLayer;
-            }
-            else {
-                cols[i].gameObject.layer = buildingSystem.buildingLayer;
-                cols[i].isTrigger = true;
-            }
+            if(cols[i].gameObject.layer == buildingSystem.builtLayer)
+                builtLayerFound = true;
+
+            cols[i].gameObject.layer = buildingSystem.buildingLayer;
+            cols[i].isTrigger = true;
         }
+        if(!builtLayerFound) {
+            Debug.LogWarning("No original colliders have 'built' layer; object may not be editable");
+        }
+
         for(int i = 0; i < navObstacles.Length; ++i) {
             navObstacles[i].enabled = false;
         }
-        // for(int i = 0; i < renderers.Length; ++i) {
-        //     origMats[i] = renderers[i].materials;
-        //     renderers[i].materials = validMats[i];
-        // }
+
         materialsReplacer.Replace(buildingSystem.validPlacementMat);
+
         rb = GetComponentInChildren<Rigidbody>();
         if(!rb)
             rb = cols[0].gameObject.AddComponent<Rigidbody>();
+
         rb.isKinematic = true;
-        // rb.detectCollisions = true;
         rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
     }
+
+    /// <summary>
+    /// Set object to finalized built state. Restore collider and layer states. Rigidbody handled based on options. Materials restored and NavmeshObstacles enabled.
+    /// </summary>
     public void FinalizePlacement() {
+        if(!beingBuilt) 
+            return;
+
         for(int i = 0; i < cols.Length; ++i) {
-            if(item.HasTag(ItemTag.Zone) && origColLayers[i] != buildingSystem.builtLayer) {
-                // cols[i].gameObject.layer = buildingSystem.triggerLayer;
-            }
-            else {
-                cols[i].isTrigger = false;
-                if(i > 0 && cols[i].gameObject == cols[i-1].gameObject) {}
-                else
-                    cols[i].gameObject.layer = origColLayers[i];
-            }
+            cols[i].isTrigger = origColTriggers[i];
+            cols[i].gameObject.layer = origColLayers[i];
         }
         if(keepActiveRb) {
             rb.isKinematic = false;
@@ -109,37 +118,21 @@ public class BuildingSystemObject : MonoBehaviour, IBuildable
             Destroy(rb);
         }
         
-        // rb.isKinematic = true;
-        // rb.detectCollisions = false;
-
-        // for(int i = 0; i < renderers.Length; ++i) {
-        //     renderers[i].materials = origMats[i];
-        // }
         materialsReplacer.Restore();
         for(int i = 0; i < navObstacles.Length; ++i) {
             navObstacles[i].enabled = true;
         }
-        // var table = GetComponentInParent<TableController>();
-        // if(table) table.RegisterTable();
 
         beingBuilt = false;
     }
-    // private void OnTriggerEnter(Collider other) {
-    //     buildingSystem.SetBuildObjectColliding(true);
-    // }
+
     bool prevOverlapping;
-    public void SetOverlapping(bool overlapping) {
+    void SetOverlapping(bool overlapping) {
         if(overlapping != prevOverlapping) {
             if(overlapping) {
-                // for(int i = 0; i < renderers.Length; ++i) {
-                //     renderers[i].materials = invalidMats[i];
-                // }
                 materialsReplacer.Replace(buildingSystem.invalidPlacementMat);
             }
             else {
-                // for(int i = 0; i < renderers.Length; ++i) {
-                //     renderers[i].materials = validMats[i];
-                // }
                 materialsReplacer.Replace(buildingSystem.validPlacementMat);
             }
             prevOverlapping = overlapping;
@@ -147,35 +140,40 @@ public class BuildingSystemObject : MonoBehaviour, IBuildable
     }
     
     private void OnTriggerExit(Collider other) {
-        if(!beingBuilt) return;
+        if(!beingBuilt) 
+            return;
+
         buildingSystem.SetBuildObjectColliding(false, false, other);
         SetOverlapping(false);
     }
-    private void OnTriggerStay(Collider other) {
-        if(!beingBuilt) return;
-        if(item.HasTag(ItemTag.Zone) && (other.gameObject.layer ==  charLayer || other.CompareTag("Floor"))) return;
-        buildingSystem.SetBuildObjectColliding(true, other.CompareTag(gameObject.tag), other);
-        // Debug.Log(other.gameObject);
-        SetOverlapping(true);
 
-        // Debug.Log("Triggerstay");
+    private void OnTriggerStay(Collider other) {
+        if(!beingBuilt)
+            return;
+        if((ignoreLayers & (1 << other.gameObject.layer)) != 0
+        || ignoreTags.Contains(other.tag))
+            return;
+
+        buildingSystem.SetBuildObjectColliding(true, other.CompareTag(gameObject.tag), other);
+        SetOverlapping(true);
     }
-    // private void OnCollisionEnter(Collision other) {
-    //     buildingSystem.SetBuildObjectColliding(true);
-    // }
-    // private void OnCollisionExit(Collision other) {
-    //     buildingSystem.SetBuildObjectColliding(false);
-    // }
 
     public void OnToggleBuildableVisual(bool b) {
-        if(buildingVisuals == null) return;
+        if(buildingVisuals == null) 
+            return;
+
         foreach(var r in buildingVisuals)
             r.enabled = b;
             
         onToggleVisuals?.Invoke(b);
     }
+
     public void OnToggleBuildableEdit(bool b) {
         onToggleEdit?.Invoke(b);
+    }
+
+    public bool CanEdit() {
+        return allowEdit;
     }
 }
 }
