@@ -302,6 +302,7 @@ public class BuildingSystem : Singleton<BuildingSystem>
     /// Get or create built item from instance. If created, initialize and add built item to collection.
     /// </summary>
     void GetOrCreateBuiltItem(GameObject instance) {
+        UpdateCurrentSceneBuiltItems();
         int instanceId = FindBuiltItemIndexFromInstance(instance);
 
         if(instanceId == -1) {
@@ -318,8 +319,6 @@ public class BuildingSystem : Singleton<BuildingSystem>
                 currBuiltItem.guid = currBuiltItem.objComponent.guidComponent.GetGuid().ToString();
 
             UpdateBuiltBuildables(currBuiltItem);
-            
-            UpdateCurrentSceneBuiltItems();
             
             currBuiltItems.Add(currBuiltItem);
             foreach(var tag in currBuiltItem.item.itemTags)
